@@ -1,5 +1,6 @@
 # Author: Soumendra Ganguly.
 
+import sys
 import termios
 import copy
 
@@ -101,16 +102,18 @@ for flag, masklist in [(_IFLAG, _ifbool),
 
 # Keys of _num_d are lowercase names for masks that take
 # nonnegative integer values. For example, TABDLY can
-# take the integer value TAB0. However, in this module
-# we will specify the values of such masks as lowercase
-# standard names of the values, for example "tab0" instead
-# of the integer value TAB0.
+# take the integer value TAB0. This loop will make sure
+# that these integer values can be accessed using
+# lowercase names. For example, stty.tab0 will be
+# same as termios.TAB0.
 #
 # Example element of _num_d.items() is
-# ("nldly", 4-element-tuple), where 4-element-tuple is
+# ("nldly", 3-element-tuple), where 3-element-tuple is
 # (_OFLAG, termios.NLDLY,
-# {"nl0": termios.NL0, "nl1": termios.NL1},
-# {termios.NL0: "nl0", termios.NL1: "nl1"})
+# {stty.nl0: "nl0", stty.nl1: "nl1"}).
+#
+# Note again that the 3rd element of this example tuple
+# is same as {termios.NL0: "nl0", termios.NL1: "nl1"}.
 _num_d = {}
 for flag, maskdict in [(_CFLAG, _cs), (_OFLAG, _dly)]:
     for mask, maskvalues in maskdict.items():
@@ -118,14 +121,21 @@ for flag, maskdict in [(_CFLAG, _cs), (_OFLAG, _dly)]:
             # Values of mask that are available on
             # system; for example, if mask is CRDLY
             # and system only has CR0, CR1, then
-            # avail = {"cr0": termios.CR0, "cr1": termios.CR1}.
-            avail = {v.lower(): getattr(termios, v) for v in
-                                maskvalues if hasattr(termios, v)}
-            # Mapping that is inverse of 'avail'.
-            inverse = {v: k for k, v in avail.items()}
+            # avail == {termios.CR0: "cr0", termios.CR1: "cr1"} ==
+            # {stty.cr0: "cr0", stty.cr1: "cr1"}.
+            avail = {}
+            for v in maskvalues:
+                if hasattr(termios, v):
+                    num_v = getattr(termios, v)
+                    avail[num_v] = v.lower()
+
+                    # Example explaining this setattr: it will
+                    # define stty.cr0 to be same as termios.CR0.
+                    setattr(sys.modules[__name__], v.lower(), num_v)
+                    __all__.append(v.lower())
 
             _num_d[mask.lower()] = (flag, getattr(termios, mask),
-                                       avail, inverse)
+                                    avail)
 
 # Example element of _baud_d.items() is (50, termios.B50)
 # Example element of _baud_d_inverse.items() is (termios.B50, 50)
@@ -166,9 +176,9 @@ OFBOOL_A = [mask.lower() for mask in _ofbool if hasattr(termios, mask)]
 CFBOOL_A = [mask.lower() for mask in _cfbool if hasattr(termios, mask)]
 LFBOOL_A = [mask.lower() for mask in _lfbool if hasattr(termios, mask)]
 
-CS_A = {mask.lower(): [v.lower() for v in _cs[mask] if hasattr(termios, v)]
+CS_A = {mask.lower(): [(v.lower(), getattr(termios, v)) for v in _cs[mask] if hasattr(termios, v)]
         for mask in _cs if hasattr(termios, mask)},
-DLY_A = {mask.lower(): [v.lower() for v in _dly[mask] if hasattr(termios, v)]
+DLY_A = {mask.lower(): [(v.lower(), getattr(termios, v)) for v in _dly[mask] if hasattr(termios, v)]
          for mask in _dly if hasattr(termios, mask)}
 
 CC_A = [*_cc_d]
@@ -195,7 +205,7 @@ class Stty(object):
         for name in _num_d:
             x = _num_d[name]
             y = self._termios[x[0]] & x[1]
-            self.__setattr__(name, x[3][y])
+            self.__setattr__(name, x[2][y])
 
         for name in _speed_d:
             x = self._termios[_speed_d[name]]
@@ -228,19 +238,19 @@ class Stty(object):
             return
 
         if name in _num_d:
-            if not isinstance(value, str):
+            if not isinstance(value, int):
                 raise TypeError(f"value of attribute '{name}' must have "
-                                "type 'str'")
+                                "type 'int'")
 
             x = _num_d[name]
             if value not in x[2]:
                 raise ValueError(f"unsupported value '{value}' for "
-                                 "attribute '{name}'")
+                                 f"attribute '{name}'")
 
             self._termios[x[0]] &= ~x[1]
-            self._termios[x[0]] |= x[2][value]
+            self._termios[x[0]] |= value
 
-            super().__setattr__(name, value)
+            super().__setattr__(name, x[2][value])
             return
 
         if name in _speed_d:
@@ -250,7 +260,7 @@ class Stty(object):
 
             if value not in _baud_d:
                 raise ValueError(f"unsupported value {value} for "
-                                 "attribute '{name}'")
+                                 f"attribute '{name}'")
 
             self._termios[_speed_d[name]] = _baud_d[value]
 
@@ -278,7 +288,7 @@ class Stty(object):
 
             if value < 0:
                 raise ValueError(f"expected Nonnegative value for "
-                                 "attribute '{name}'")
+                                 f"attribute '{name}'")
 
             self._termios[_CC][_noncanon_d[name]] = bytes([value])
 
@@ -292,7 +302,7 @@ class Stty(object):
 
             if value < 0:
                 raise ValueError(f"expected Nonnegative value for "
-                                 "attribute '{name}'")
+                                 f"attribute '{name}'")
 
             self._winsize[_winsz_d[name]] = value
 
@@ -333,16 +343,16 @@ class Stty(object):
     def evenp(self, plus=True):
         """Set/unset evenp combination mode."""
         if plus:
-            self.set(parenb=True, csize="cs7", parodd=False)
+            self.set(parenb=True, csize=cs7, parodd=False)
         else:
-            self.set(parenb=False, csize="cs8")
+            self.set(parenb=False, csize=cs8)
 
     def oddp(self, plus=True):
         """Set/unset oddp combination mode."""
         if plus:
-            self.set(parenb=True, csize="cs7", parodd=True)
+            self.set(parenb=True, csize=cs7, parodd=True)
         else:
-            self.set(parenb=False, csize="cs8")
+            self.set(parenb=False, csize=cs8)
 
     def raw(self):
         """Set raw combination mode."""
@@ -351,7 +361,7 @@ class Stty(object):
         for x in LFBOOL_A:
             self.__setattr__(x, False)
         self.set(opost=False, parenb=False,
-                 csize="cs8", min=1, time=0)
+                 csize=cs8, min=1, time=0)
 
     def nl(self, plus=True):
         """Set/unset nl combination mode."""
