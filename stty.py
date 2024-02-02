@@ -377,7 +377,7 @@ class Stty(object):
         """Get settings from terminal."""
         super().__setattr__("_termios", termios.tcgetattr(fd))
         if _HAVE_WINSZ:
-            super().__setattr__("_winsize", termios.tcgetwinsize(fd))
+            super().__setattr__("_winsize", list(termios.tcgetwinsize(fd)))
         else:
             super().__setattr__("_winsize", None)
 
