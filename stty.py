@@ -221,7 +221,7 @@ class Stty(object):
             raise ValueError("only one of fd or path must be provided")
 
         if fd:
-            self.from(fd)
+            self.fromfd(fd)
 
         if path:
             self.load(path)
@@ -373,7 +373,8 @@ class Stty(object):
                              f"necessary attributes: {deficiency}")
         self.set(**d)
 
-    def from(self, fd):
+    def fromfd(self, fd):
+        """Get settings from terminal."""
         super().__setattr__("_termios", termios.tcgetattr(fd))
         if _HAVE_WINSZ:
             super().__setattr__("_winsize", termios.tcgetwinsize(fd))
@@ -405,7 +406,7 @@ class Stty(object):
             for name in _winsz_d:
                 self.__setattr__(name, self._winsize[_winsz_d[name]])
 
-    def to(self, fd, when=NOW, apply_termios=True,
+    def tofd(self, fd, when=NOW, apply_termios=True,
            apply_winsize=True):
         """Apply settings to terminal."""
         if apply_termios:
