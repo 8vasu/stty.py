@@ -347,7 +347,7 @@ class Stty(object):
         with open(path, "w") as f:
             json.dump(d, f)
 
-       return None
+        return None
 
     def load(self, path):
         """Load termios and winsize from JSON file."""
