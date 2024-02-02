@@ -389,7 +389,7 @@ class Stty(object):
         for name in _num_d:
             x = _num_d[name]
             y = self._termios[x[0]] & x[1]
-            self.__setattr__(name, x[2][y])
+            self.__setattr__(name, y)
 
         for name in _speed_d:
             x = self._termios[_speed_d[name]]
