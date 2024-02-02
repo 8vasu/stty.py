@@ -214,16 +214,16 @@ SPEEDS = [*_baud_d]
 class Stty(object):
     """Manipulate termios and winsize in the style of stty(1)."""
     def __init__(self, fd=None, path=None, **opts):
-        if not fd and not path:
+        if fd == None and path == None:
             raise ValueError("fd or path must be provided")
 
-        if fd and path:
+        if fd != None and path != None:
             raise ValueError("only one of fd or path must be provided")
 
-        if fd:
+        if fd != None:
             self.fromfd(fd)
 
-        if path:
+        if path != None:
             self.load(path)
 
         self.set(**opts)
