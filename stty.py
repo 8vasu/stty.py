@@ -17,12 +17,20 @@
 import sys
 import termios
 import copy
+import json
 
 __all__ = [
     "Stty", "NOW", "DRAIN", "FLUSH", "SPEEDS",
     "IFBOOL_A", "OFBOOL_A", "CFBOOL_A", "LFBOOL_A",
-    "CS_A", "DLY_A", "SPEED_A", "WINSZ_A", "CC_A"
+    "CS_A", "DLY_A", "SPEED_A", "WINSZ_A", "CC_A",
+    "control"
 ]
+
+
+def control(c):
+    """Return the control character corresponding to c."""
+    return bytes([ord(c) & 0x1F])
+
 
 # Indices for termios attribute list.
 _IFLAG = 0
@@ -202,39 +210,23 @@ WINSZ_A = [*_winsz_d]
 
 SPEEDS = [*_baud_d]
 
+
 class Stty(object):
     """Manipulate termios and winsize in the style of stty(1)."""
-    def __init__(self, fd):
-        super().__setattr__("_termios", termios.tcgetattr(fd))
-        if _HAVE_WINSZ:
-            super().__setattr__("_winsize", termios.tcgetwinsize(fd))
-        else:
-            super().__setattr__("_winsize", None)
+    def __init__(self, fd=None, path=None, **opts):
+        if not fd and not path:
+            raise ValueError("fd or path must be provided")
 
-        for name in _bool_d:
-            x = _bool_d[name]
-            value = True if (self._termios[x[0]] & x[1]) else False
-            self.__setattr__(name, value)
+        if fd and path:
+            raise ValueError("only one of fd or path must be provided")
 
-        for name in _num_d:
-            x = _num_d[name]
-            y = self._termios[x[0]] & x[1]
-            self.__setattr__(name, x[2][y])
+        if fd:
+            self.from(fd)
 
-        for name in _speed_d:
-            x = self._termios[_speed_d[name]]
-            self.__setattr__(name, _baud_d_inverse[x])
+        if path:
+            self.load(path)
 
-        for name in _cc_d:
-            self.__setattr__(name, self._termios[_CC][_cc_d[name]])
-
-        for name in _noncanon_d:
-            self.__setattr__(name,
-                             ord(self._termios[_CC][_noncanon_d[name]]))
-
-        if self._winsize:
-            for name in _winsz_d:
-                self.__setattr__(name, self._winsize[_winsz_d[name]])
+        self.set(**opts)
 
     def __setattr__(self, name, value):
         if name == "_termios" or name == "_winsize":
@@ -325,9 +317,8 @@ class Stty(object):
 
         raise AttributeError(f"attribute '{name}' unsupported on platform")
 
-    def save(self):
-        """Return deep copy of self."""
-        return copy.deepcopy(self)
+    def __repr__(self):
+        return ", ".join([f"{x}={getattr(self, x)}" for x in _available])
 
     def get(self):
         """Return dictionary of relevant attributes."""
@@ -335,19 +326,87 @@ class Stty(object):
 
     def set(self, **opts):
         """Set multiple attributes as named arguments."""
-        for x in opts:
-            if x not in _available: # or should be some keyword not found error?
-                raise AttributeError(f"attribute '{name}' unsupported on "
-                                     "platform")
+        excess = set(opts) - set(_available)
+        if len(excess) > 0:
+            raise AttributeError("attributes in the following set are "
+                                 f"unsupported on this platform: {excess}")
 
         for x in opts:
             self.__setattr__(x, opts[x])
 
-    def __repr__(self):
-        return ", ".join([f"{x}={getattr(self, x)}" for x in _available])
+    def save(self, path=None):
+        """Return deep copy of self or save JSON.
+        This mimics "stty -g"."""
+        if not path:
+            return copy.deepcopy(self)
 
-    def apply(self, fd, when=NOW, apply_termios=True,
-              apply_winsize=True):
+        d = self.get()
+        d["_termios"] = self._termios
+        d["_winsize"] = self._winsize
+
+        with open(path, "w") as f:
+            json.dump(d, f)
+
+       return None
+
+    def load(self, path):
+        """Load termios and winsize from JSON file."""
+        with open(path, "r") as f:
+            d = json.load(f)
+
+        if "_termios" not in d:
+            raise ValueError("JSON file does not contain termios data")
+        super().__setattr__("_termios", d["_termios"])
+        d.pop("_termios")
+
+        if _HAVE_WINSZ:
+            if "_winsize" not in d:
+                raise ValueError("JSON file does not contain winsize data")
+            super().__setattr__("_winsize", d["_winsize"])
+        else:
+            super().__setattr__("_winsize", None)
+        d.pop("_winsize", None)
+
+        deficiency = set(_available) - set(d)
+        if len(deficiency) > 0:
+            raise ValueError("JSON file does not contain the following "
+                             f"necessary attributes: {deficiency}")
+        self.set(**d)
+
+    def from(self, fd):
+        super().__setattr__("_termios", termios.tcgetattr(fd))
+        if _HAVE_WINSZ:
+            super().__setattr__("_winsize", termios.tcgetwinsize(fd))
+        else:
+            super().__setattr__("_winsize", None)
+
+        for name in _bool_d:
+            x = _bool_d[name]
+            value = True if (self._termios[x[0]] & x[1]) else False
+            self.__setattr__(name, value)
+
+        for name in _num_d:
+            x = _num_d[name]
+            y = self._termios[x[0]] & x[1]
+            self.__setattr__(name, x[2][y])
+
+        for name in _speed_d:
+            x = self._termios[_speed_d[name]]
+            self.__setattr__(name, _baud_d_inverse[x])
+
+        for name in _cc_d:
+            self.__setattr__(name, self._termios[_CC][_cc_d[name]])
+
+        for name in _noncanon_d:
+            self.__setattr__(name,
+                             ord(self._termios[_CC][_noncanon_d[name]]))
+
+        if self._winsize:
+            for name in _winsz_d:
+                self.__setattr__(name, self._winsize[_winsz_d[name]])
+
+    def to(self, fd, when=NOW, apply_termios=True,
+           apply_winsize=True):
         """Apply settings to terminal."""
         if apply_termios:
             termios.tcsetattr(fd, when, self._termios)
