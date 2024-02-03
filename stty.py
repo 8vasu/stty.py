@@ -19,17 +19,67 @@ import termios
 import copy
 import json
 
+termios.POSIX_VDISABLE = 0x00
+
 __all__ = [
     "Stty", "NOW", "DRAIN", "FLUSH", "SPEEDS",
     "IFBOOL_A", "OFBOOL_A", "CFBOOL_A", "LFBOOL_A",
-    "CS_A", "DLY_A", "SPEED_A", "WINSZ_A", "CC_A",
-    "control"
+    "CS_A", "DLY_A", "SPEED_A", "WINSZ_A", "CC_A"
 ]
 
+def cc_str_to_bytes(s):
+    """Convert string to bytes where input string is
+    the "string" in "<control>-character string" under
+    "Special Control Character Assignments" in the POSIX
+    manpage of stty(1)."""
 
-def control(c):
-    """Return the control character corresponding to c."""
-    return bytes([ord(c) & 0x1F])
+    # 's' is of type 'str'
+
+    if len(s) == 1:
+        return bytes([ord(s)])
+
+    if hasattr(termios, "POSIX_VDISABLE") and s in ["^-", "undef"]:
+        return bytes([termios.POSIX_VDISABLE])
+
+    if len(s) == 2 and s[0] == "^":
+        if s[1] == "?":
+            return bytes([0x7f]) # DEL
+
+        if s[1].isalpha() or s[1] in "[\\]^_":
+            return bytes([ord(s[1]) & 0x1f])
+
+    return None
+
+
+def cc_bytes_to_str(b):
+    """Convert bytes to string where output string is
+    the "string" in "<control>-character string" under
+    "Special Control Character Assignments" in the POSIX
+    manpage of stty(1)."""
+
+    # 'b' is of type 'bytes'
+
+    if len(b) != 1:
+        return None
+
+    byte = b[0]
+
+    if hasattr(termios, "POSIX_VDISABLE") and byte == termios.POSIX_VDISABLE:
+        return "undef"
+
+    if 0x20 <= byte <= 0x7e:
+        return chr(byte)
+
+    if byte == 0x7f: # DEL
+        return "^?"
+
+    if 0x01 <= byte <= 0x1f:
+        c = chr(byte + 0x40)
+        if c.islower():
+            c = c.upper()
+        return f"^{c}"
+
+    return None
 
 
 # Indices for termios attribute list.
@@ -274,17 +324,36 @@ class Stty(object):
             return
 
         if name in _cc_d:
-            if not isinstance(value, bytes):
+            if not (isinstance(value, str) or isinstance(value, bytes)):
                 raise TypeError(f"value of attribute '{name}' must have "
-                                "type 'bytes'")
+                                "type 'str' or 'bytes'")
 
-            if len(value) != 1:
-                raise ValueError(f"value of attribute '{name}' must have "
-                                 "length equal to 1")
+            if isinstance(value, str):
+                value_as_bytes = cc_str_to_bytes(value)
+                # cc_bytes_to_str() is not a strict inverse of
+                # cc_str_to_bytes(); for example:
+                # cc_bytes_to_str(cc_str_to_bytes("^-")) == "undef"
+                # cc_bytes_to_str(cc_str_to_bytes("^d")) == "D"
+                #
+                # calling cc_bytes_to_str() here ensures "uniformity
+                # of representation"; for example, "^a" and "^A" both
+                # represent <SOH> in the POSIX manpage of stty(1) and
+                # the cc_bytes_to_str() call here will make sure that
+                # "name" is set to "^A" for either value "^a", "^A" of
+                # the variable "value"
+                value_as_str = cc_bytes_to_str(value_as_bytes)
 
-            self._termios[_CC][_cc_d[name]] = value
+            if isinstance(value, bytes):
+                value_as_bytes = value
+                value_as_str = cc_bytes_to_str(value_as_bytes)
 
-            super().__setattr__(name, value)
+            if value_as_bytes == None or value_as_str == None:
+                raise ValueError(f"unsupported value '{value}' for "
+                                 f"attribute '{name}'")
+
+            self._termios[_CC][_cc_d[name]] = value_as_bytes
+
+            super().__setattr__(name, value_as_str)
             return
 
         if name in _noncanon_d:
@@ -293,7 +362,7 @@ class Stty(object):
                                 "type 'int'")
 
             if value < 0:
-                raise ValueError(f"expected Nonnegative value for "
+                raise ValueError(f"expected nonnegative value for "
                                  f"attribute '{name}'")
 
             self._termios[_CC][_noncanon_d[name]] = bytes([value])
@@ -307,7 +376,7 @@ class Stty(object):
                                 "type 'int'")
 
             if value < 0:
-                raise ValueError(f"expected Nonnegative value for "
+                raise ValueError(f"expected nonnegative value for "
                                  f"attribute '{name}'")
 
             self._winsize[_winsz_d[name]] = value
