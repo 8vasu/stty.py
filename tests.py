@@ -25,6 +25,5 @@ for c in posix_circumflex_charlist:
     except AssertionError:
         print(f'failed for "^{c}"')
 
-if hasattr(termios, "POSIX_VDISABLE"):
-    for s in ["^-", "undef"]:
-        assert stty.cc_bytes_to_str(stty.cc_str_to_bytes(s)) == "undef"
+for s in ["^-", "undef"]:
+    assert stty.cc_bytes_to_str(stty.cc_str_to_bytes(s)) == "undef"

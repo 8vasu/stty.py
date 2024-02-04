@@ -19,7 +19,7 @@ import termios
 import copy
 import json
 
-termios.POSIX_VDISABLE = 0x00
+termios._POSIX_VDISABLE = 0x00
 
 __all__ = [
     "Stty", "NOW", "DRAIN", "FLUSH", "SPEEDS",
@@ -38,8 +38,8 @@ def cc_str_to_bytes(s):
     if len(s) == 1:
         return bytes([ord(s)])
 
-    if hasattr(termios, "POSIX_VDISABLE") and s in ["^-", "undef"]:
-        return bytes([termios.POSIX_VDISABLE])
+    if s in ["^-", "undef"]:
+        return bytes([termios._POSIX_VDISABLE])
 
     if len(s) == 2 and s[0] == "^":
         if s[1] == "?":
@@ -64,7 +64,7 @@ def cc_bytes_to_str(b):
 
     byte = b[0]
 
-    if hasattr(termios, "POSIX_VDISABLE") and byte == termios.POSIX_VDISABLE:
+    if byte == termios._POSIX_VDISABLE:
         return "undef"
 
     if 0x20 <= byte <= 0x7e:
