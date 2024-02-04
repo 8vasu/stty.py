@@ -19,7 +19,8 @@ import termios
 import copy
 import json
 
-termios._POSIX_VDISABLE = 0x00
+if not hasattr(termios, "_POSIX_VDISABLE"):
+    termios._POSIX_VDISABLE = 0x00
 
 __all__ = [
     "Stty", "NOW", "DRAIN", "FLUSH", "SPEEDS",
