@@ -15,18 +15,31 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
+import os
 import termios
 import copy
 import json
 
-if not hasattr(termios, "_POSIX_VDISABLE"):
-    termios._POSIX_VDISABLE = 0x00
-
 __all__ = [
-    "Stty", "NOW", "DRAIN", "FLUSH", "SPEEDS",
-    "IFBOOL_A", "OFBOOL_A", "CFBOOL_A", "LFBOOL_A",
-    "CS_A", "DLY_A", "SPEED_A", "WINSZ_A", "CC_A"
+    "Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH",
+    # The following are defined solely for the
+    # convenience of the user and are not used
+    # in implementation of the Stty class.
+    "baud_rates", "all_attributes", "attribute_help"
 ]
+
+# These are the "action" constants for termios.tcsetattr()
+# and are the only values accepted by the "when" named
+# argument of Stty.tofd().
+TCSANOW = termios.TCSANOW
+TCSADRAIN = termios.TCSADRAIN
+TCSAFLUSH = termios.TCSAFLUSH
+
+if not hasattr(termios, "_POSIX_VDISABLE"):
+    # This is not desirable, but I have added
+    # _POSIX_VDISABLE to the termios module in Python 3.13:
+    # https://github.com/python/cpython/pull/114985
+    termios._POSIX_VDISABLE = 0x00
 
 def cc_str_to_bytes(s):
     """Convert string to bytes where input string is
@@ -103,91 +116,98 @@ _HAVE_WINSZ = (hasattr(termios, "TIOCGWINSZ")
                and hasattr(termios, "tcsetwinsize"))
 
 # All possible iflag boolean mask names.
-_ifbool = [
+_ifbool = {
     "IGNBRK", "BRKINT", "IGNPAR", "PARMRK", "INPCK", "ISTRIP",
     "INLCR", "IGNCR", "ICRNL", "IUCLC", "IXON", "IXANY",
     "IXOFF", "IMAXBEL"
-]
+}
 
 # All possible oflag boolean mask names.
-_ofbool = [
+_ofbool = {
     "OPOST", "OLCUC", "ONLCR", "OCRNL",
     "ONOCR", "ONLRET", "OFILL", "OFDEL"
-]
+}
 
 # All possible cflag boolean mask names.
-_cfbool = [
+_cfbool = {
     "CSTOPB", "CREAD", "PARENB", "PARODD",
     "HUPCL", "CLOCAL", "CIBAUD", "CRTSCTS"
-]
+}
 
 # All possible lflag boolean mask names.
-_lfbool = [
+_lfbool = {
     "ISIG", "ICANON", "XCASE", "ECHO", "ECHOE", "ECHOK",
     "ECHONL", "ECHOCTL", "ECHOPRT", "ECHOKE", "FLUSHO",
     "NOFLSH", "TOSTOP", "PENDIN", "IEXTEN"
-]
+}
 
-# Character size mask name (part of cflag)
-# and names of all possible values.
-_cs = {"CSIZE": ["CS5", "CS6", "CS7", "CS8"]}
+# Name of mask representing "number of bits transmitted or
+# received per byte" (part of cflag) and names of all
+# possible values.
+_cs = {"CSIZE": {"CS5", "CS6", "CS7", "CS8"}}
 
 # All possible delay mask names (parts of oflag)
 # and names of all of their possible values.
 _dly = {
-    "CRDLY": ["CR0", "CR1", "CR2", "CR3"],
-    "NLDLY": ["NL0", "NL1"],
-    "TABDLY": ["TAB0", "TAB1", "TAB2", "TAB3"],
-    "BSDLY": ["BS0", "BS1"],
-    "FFDLY": ["FF0", "FF1"],
-    "VTDLY": ["VT0", "VT1"]
+    "CRDLY": {"CR0", "CR1", "CR2", "CR3"},
+    "NLDLY": {"NL0", "NL1"},
+    "TABDLY": {"TAB0", "TAB1", "TAB2", "TAB3"},
+    "BSDLY": {"BS0", "BS1"},
+    "FFDLY": {"FF0", "FF1"},
+    "VTDLY": {"VT0", "VT1"}
 }
 
-# Names of all possible indices
-# of the control character list.
-_cc = [
+# Names of all possible indices of the control character list.
+_cc = {
     "VEOF", "VEOL", "VEOL2", "VERASE", "VERASE2", "VWERASE",
     "VKILL", "VREPRINT", "VINTR", "VQUIT", "VSUSP", "VDSUSP",
     "VSTART", "VSTOP", "VLNEXT", "VSTATUS", "VDISCARD", "VSWTCH"
-]
+}
 
 # All possible Baud rate "indices".
-_r = [
+_r = {
     0, 50, 75, 110, 134, 150, 200, 300, 600,
     1200, 1800, 2400, 4800, 9600, 19200, 38400,
     57600, 115200, 230400, 460800, 500000, 576000,
     921600, 1000000, 1152000, 1500000, 2000000,
     2500000, 3000000, 3500000, 4000000
-]
+}
 
 # Keys of _bool_d are lowercase names of masks that take boolean values
 # (for example one can turn ECHO on/off).
 #
 # Example element of _bool_d.items() is ("echo", (_LFLAG, termios.ECHO))
 _bool_d = {}
-for flag, masklist in [(_IFLAG, _ifbool),
-                       (_OFLAG, _ofbool),
-                       (_CFLAG, _cfbool),
-                       (_LFLAG, _lfbool)]:
-    for mask in masklist:
+for flag, maskset in [(_IFLAG, _ifbool),
+                      (_OFLAG, _ofbool),
+                      (_CFLAG, _cfbool),
+                      (_LFLAG, _lfbool)]:
+    for mask in maskset:
         if hasattr(termios, mask):
             _bool_d[mask.lower()] = (flag, getattr(termios, mask))
 
-# Keys of _num_d are lowercase names for masks that take
-# nonnegative integer values. For example, TABDLY can
-# take the integer value TAB0. This loop will make sure
-# that these integer values can be accessed using
-# lowercase names. For example, stty.tab0 will be
-# same as termios.TAB0.
+# Keys of _symbol_d are lowercase names of masks that take
+# values from a small set (cardinality < 10) of named
+# constants. For example, TABDLY can take values from the
+# set {TAB0, TAB1, TAB2, TAB3}. This loop will make sure
+# that these masks can be set using lowercase names and
+# lowercase strings representing the values. For example,
+# stty.tab0 will be same as termios.TAB0, and for an Stty
+# object x, the following 2 lines will have same effect:
+# x.tabdly = stty.tab0
+# x.tabdly = "tab0"
 #
-# Example element of _num_d.items() is
-# ("nldly", 3-element-tuple), where 3-element-tuple is
+# Example element of _symbol_d.items() is
+# ("nldly", 4-element-tuple), where 4-element-tuple is
 # (_OFLAG, termios.NLDLY,
-# {stty.nl0: "nl0", stty.nl1: "nl1"}).
+# {stty.nl0: "nl0", stty.nl1: "nl1"},
+# {"nl0": stty.nl0, "nl1": stty.nl1}).
 #
 # Note again that the 3rd element of this example tuple
-# is same as {termios.NL0: "nl0", termios.NL1: "nl1"}.
-_num_d = {}
+# is same as {termios.NL0: "nl0", termios.NL1: "nl1"}
+# and the 4th one is same as
+# {"nl0": termios.NL0, "nl1": termios.NL1}.
+_symbol_d = {}
 for flag, maskdict in [(_CFLAG, _cs), (_OFLAG, _dly)]:
     for mask, maskvalues in maskdict.items():
         if hasattr(termios, mask):
@@ -207,8 +227,10 @@ for flag, maskdict in [(_CFLAG, _cs), (_OFLAG, _dly)]:
                     setattr(sys.modules[__name__], v.lower(), num_v)
                     __all__.append(v.lower())
 
-            _num_d[mask.lower()] = (flag, getattr(termios, mask),
-                                    avail)
+            avail_inverse = {v: k for k, v in avail.items()}
+
+            _symbol_d[mask.lower()] = (flag, getattr(termios, mask),
+                                    avail, avail_inverse)
 
 # Example element of _baud_d.items() is (50, termios.B50)
 # Example element of _baud_d_inverse.items() is (termios.B50, 50)
@@ -231,35 +253,15 @@ _noncanon_d = {"min": termios.VMIN, "time": termios.VTIME}
 _speed_d = {"ispeed": _ISPEED, "ospeed": _OSPEED}
 
 _winsz_d = {"rows": _ROWS, "cols": _COLS} if _HAVE_WINSZ else {}
+_default_winsize = [24, 80]
 
 # List of lowercase names of all Stty object
-# attributes available on system (strings).
-_available = [
-    *_bool_d, *_num_d, *_speed_d,
+# attributes available on system (strings),
+# excluding "_termios" and "_winsize".
+_available = {
+    *_bool_d, *_symbol_d, *_speed_d,
     *_cc_d, *_noncanon_d, *_winsz_d
-]
-
-# The "action" constants for tcsetattr().
-NOW = termios.TCSANOW
-DRAIN = termios.TCSADRAIN
-FLUSH = termios.TCSAFLUSH
-
-IFBOOL_A = [mask.lower() for mask in _ifbool if hasattr(termios, mask)]
-OFBOOL_A = [mask.lower() for mask in _ofbool if hasattr(termios, mask)]
-CFBOOL_A = [mask.lower() for mask in _cfbool if hasattr(termios, mask)]
-LFBOOL_A = [mask.lower() for mask in _lfbool if hasattr(termios, mask)]
-
-CS_A = {mask.lower(): [(v.lower(), getattr(termios, v)) for v in _cs[mask] if hasattr(termios, v)]
-        for mask in _cs if hasattr(termios, mask)},
-DLY_A = {mask.lower(): [(v.lower(), getattr(termios, v)) for v in _dly[mask] if hasattr(termios, v)]
-         for mask in _dly if hasattr(termios, mask)}
-
-CC_A = [*_cc_d]
-NONCANON_A = [*_noncanon_d]
-SPEED_A = [*_speed_d]
-WINSZ_A = [*_winsz_d]
-
-SPEEDS = [*_baud_d]
+}
 
 
 class Stty(object):
@@ -294,20 +296,33 @@ class Stty(object):
             super().__setattr__(name, value)
             return
 
-        if name in _num_d:
-            if not isinstance(value, int):
+        if name in _symbol_d:
+            if not (isinstance(value, int) or isinstance(value, str)):
                 raise TypeError(f"value of attribute '{name}' must have "
-                                "type 'int'")
+                                "type 'int' or 'str'")
 
-            x = _num_d[name]
-            if value not in x[2]:
-                raise ValueError(f"unsupported value '{value}' for "
-                                 f"attribute '{name}'")
+            x = _symbol_d[name] # 4-tuple
+
+            if isinstance(value, int):
+                if value not in x[2]:
+                    raise ValueError(f"unsupported value '{value}' for "
+                                     f"attribute '{name}'")
+
+                value_as_int = value
+                value_as_str = x[2][value]
+
+            if isinstance(value, str):
+                if value not in x[3]:
+                    raise ValueError(f"unsupported value '{value}' for "
+                                     f"attribute '{name}'")
+
+                value_as_int = x[3][value]
+                value_as_str = value
 
             self._termios[x[0]] &= ~x[1]
-            self._termios[x[0]] |= value
+            self._termios[x[0]] |= value_as_int
 
-            super().__setattr__(name, x[2][value])
+            super().__setattr__(name, value_as_str)
             return
 
         if name in _speed_d:
@@ -336,12 +351,12 @@ class Stty(object):
                 # cc_bytes_to_str(cc_str_to_bytes("^-")) == "undef"
                 # cc_bytes_to_str(cc_str_to_bytes("^d")) == "D"
                 #
-                # calling cc_bytes_to_str() here ensures "uniformity
+                # Calling cc_bytes_to_str() here ensures "uniformity
                 # of representation"; for example, "^a" and "^A" both
                 # represent <SOH> in the POSIX manpage of stty(1) and
                 # the cc_bytes_to_str() call here will make sure that
                 # "name" is set to "^A" for either value "^a", "^A" of
-                # the variable "value"
+                # the variable "value".
                 value_as_str = cc_bytes_to_str(value_as_bytes)
 
             if isinstance(value, bytes):
@@ -396,7 +411,7 @@ class Stty(object):
 
     def set(self, **opts):
         """Set multiple attributes as named arguments."""
-        excess = set(opts) - set(_available)
+        excess = set(opts) - _available
         if len(excess) > 0:
             raise AttributeError("attributes in the following set are "
                                  f"unsupported on this platform: {excess}")
@@ -410,34 +425,29 @@ class Stty(object):
         if not path:
             return copy.deepcopy(self)
 
-        d = self.get()
-        d["_termios"] = self._termios
-        d["_winsize"] = self._winsize
-
         with open(path, "w") as f:
-            json.dump(d, f)
+            json.dump(self.get(), f)
 
         return None
 
     def load(self, path):
         """Load termios and winsize from JSON file."""
+        if not hasattr(super(), "_termios"):
+            dev_tty_fd = os.open("/dev/tty", os.O_RDWR)
+            super().__setattr__("_termios",
+                                termios.tcgetattr(dev_tty_fd))
+            os.close(dev_tty_fd)
+
+        if _HAVE_WINSZ:
+            if not hasattr(super(), "_winsize"):
+                super().__setattr__("_winsize", _default_winsize)
+        else:
+            super().__setattr__("_winsize", None)
+
         with open(path, "r") as f:
             d = json.load(f)
 
-        if "_termios" not in d:
-            raise ValueError("JSON file does not contain termios data")
-        super().__setattr__("_termios", d["_termios"])
-        d.pop("_termios")
-
-        if _HAVE_WINSZ:
-            if "_winsize" not in d:
-                raise ValueError("JSON file does not contain winsize data")
-            super().__setattr__("_winsize", d["_winsize"])
-        else:
-            super().__setattr__("_winsize", None)
-        d.pop("_winsize", None)
-
-        deficiency = set(_available) - set(d)
+        deficiency = _available - set(d)
         if len(deficiency) > 0:
             raise ValueError("JSON file does not contain the following "
                              f"necessary attributes: {deficiency}")
@@ -456,8 +466,8 @@ class Stty(object):
             value = True if (self._termios[x[0]] & x[1]) else False
             self.__setattr__(name, value)
 
-        for name in _num_d:
-            x = _num_d[name]
+        for name in _symbol_d:
+            x = _symbol_d[name]
             y = self._termios[x[0]] & x[1]
             self.__setattr__(name, y)
 
@@ -476,8 +486,8 @@ class Stty(object):
             for name in _winsz_d:
                 self.__setattr__(name, self._winsize[_winsz_d[name]])
 
-    def tofd(self, fd, when=NOW, apply_termios=True,
-           apply_winsize=True):
+    def tofd(self, fd, when=termios.TCSANOW, apply_termios=True,
+             apply_winsize=True):
         """Apply settings to terminal."""
         if apply_termios:
             termios.tcsetattr(fd, when, self._termios)
@@ -500,10 +510,12 @@ class Stty(object):
 
     def raw(self):
         """Set raw combination mode."""
-        for x in IFBOOL_A:
-            self.__setattr__(x, False)
-        for x in LFBOOL_A:
-            self.__setattr__(x, False)
+        for x in _ifbool:
+            if hasattr(termios, x):
+                self.__setattr__(x.lower(), False)
+        for x in _lfbool:
+            if hasattr(termios, x):
+                self.__setattr__(x.lower(), False)
         self.set(opost=False, parenb=False,
                  csize=cs8, min=1, time=0)
 
@@ -521,3 +533,78 @@ class Stty(object):
 
         if hasattr(termios, "CKILL"):
             self.kill = termios.CKILL
+
+
+all_attributes = {}
+all_attributes["boolean"] = {}
+for flagname, maskset in [("iflag", _ifbool),
+                          ("oflag", _ofbool),
+                          ("cflag", _cfbool),
+                          ("lflag", _lfbool)]:
+    all_attributes["boolean"][flagname] = {mask.lower() for mask in maskset
+                                     if hasattr(termios, mask)}
+all_attributes["csize"] = {v.lower() for v in _cs["CSIZE"] if hasattr(termios, v)}
+all_attributes["delay_masks"] = {mask.lower(): {v.lower() for v in maskvalues
+                                          if hasattr(termios, v)}
+                           for mask, maskvalues in _dly.items()}
+all_attributes["control_character"] = set(_cc_d)
+all_attributes["non_canonical"] = set(_noncanon_d)
+all_attributes["speed"] = set(_speed_d)
+all_attributes["winsize"] = set(_winsz_d)
+
+baud_rates = set(_baud_d)
+
+control_character_value_help = f"""    POSSIBLE VALUES: a string or bytes object. If a string value is used, then it
+                     must be a string of length 1, or a string of length 2 staring
+                     with "^" (circumflex, caret) to represent a control character,
+                     or the string "undef". Please check the manpage of stty(1) for
+                     more details. If a value of type "bytes" is used, then it must
+                     be of length 1.
+"""
+
+
+def attribute_help():
+    """Print help for Stty attributes."""
+    print("For details on the following attributes, "
+          "check the manpage of stty(1) on your system.\n")
+
+    print("Stty attributes:\n")
+
+    for x, y in [("iflag", "input mode"),
+                 ("oflag", "output mode"),
+                 ("cflag", "control mode"),
+                 ("lflag", "local mode")]:
+        print(f"  Boolean {y} attributes (possible values: True, False):")
+        print(f"    {' '.join(sorted(all_attributes['boolean'][x]))}\n")
+
+    print("  Winsize attributes (possible values: any nonnegative integer):")
+    print(f"    {' '.join(sorted(all_attributes['winsize']))}\n")
+
+    print("  Non-canonical mode-related attributes (possible values: any nonnegative integer):")
+    print(f"    {' '.join(sorted(all_attributes['non_canonical']))}\n")
+
+    print("  CSIZE and *DLY attributes:")
+    heading1 = "ATTRIBUTE"
+    heading2 = "POSSIBLE VALUES"
+    csize_key = "csize"
+    csize_values = ", ".join(sorted([f'stty.{v}, "{v}"' for v in all_attributes["csize"]]))
+
+    padding = max(len(x) for x in all_attributes["delay_masks"])
+    padding = max(padding, len(csize_key), len(heading1))
+
+    # Print heading for the table.
+    print(f"    {heading1:^{padding}}  |  {heading2}")
+    # Print the CSIZE row.
+    print(f"    {csize_key:^{padding}}  |  {csize_values}")
+    # Print the *DLY rows.
+    for mask, maskvalset in all_attributes["delay_masks"].items():
+        mask_values = ", ".join(sorted([f'stty.{v}, "{v}"' for v in maskvalset]))
+        print(f"    {mask:^{padding}}  |  {mask_values}")
+
+    print("\n  Control character attributes:")
+    print(f"    ATTRIBUTES: {' '.join(sorted(all_attributes['control_character']))}")
+    print(control_character_value_help)
+
+    print("  Speed attributes:")
+    print(f"    ATTRIBUTES: {' '.join(sorted(all_attributes['speed']))}")
+    print(f"    POSSIBLE VALUES: {', '.join([str(n) for n in sorted(baud_rates)])}")
