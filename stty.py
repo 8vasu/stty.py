@@ -22,10 +22,10 @@ import json
 
 __all__ = [
     "Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH",
-    # The following are defined solely for the
-    # convenience of the user and are not used
-    # in implementation of the Stty class.
-    "baud_rates", "all_attributes", "attribute_help"
+    # The following is defined solely for the
+    # convenience of the user and is not used
+    # in the implementation of the Stty class.
+    "all_attributes"
 ]
 
 # These are the "action" constants for termios.tcsetattr()
@@ -39,6 +39,8 @@ if not hasattr(termios, "_POSIX_VDISABLE"):
     # This is not desirable, but I have added
     # _POSIX_VDISABLE to the termios module in Python 3.13:
     # https://github.com/python/cpython/pull/114985
+    #
+    # I will remove this after sometime.
     termios._POSIX_VDISABLE = 0x00
 
 def cc_str_to_bytes(s):
@@ -403,7 +405,7 @@ class Stty(object):
         raise AttributeError(f"attribute '{name}' unsupported on platform")
 
     def __repr__(self):
-        return ", ".join([f"{x}={getattr(self, x)}" for x in _available])
+        return ", ".join(sorted([f"{x}={getattr(self, x)}" for x in _available]))
 
     def get(self):
         """Return dictionary of relevant attributes."""
@@ -534,6 +536,47 @@ class Stty(object):
         if hasattr(termios, "CKILL"):
             self.kill = termios.CKILL
 
+    def openpty(self, apply_termios=True, apply_winsize=True):
+        """Open a new pty pair and apply
+        settings to slave end.
+        """
+        m, s = os.openpty()
+
+        self.tofd(s, apply_termios=apply_termios,
+                  apply_winsize=apply_winsize)
+
+        return m, s, os.ttyname(s)
+
+    def forkpty(self, apply_termios=True, apply_winsize=True):
+        """Call os.forkpty() and apply settings to slave end."""
+        child = 0
+        stdin_fd = 0
+
+        if hasattr(os, "ptsname"):
+            pid, m = os.forkpty()
+
+            if pid == child:
+                # Slave end of pty is now standard input
+                # of child process thanks to a login_tty()
+                # call in forkpty().
+                self.tofd(stdin_fd, apply_termios=apply_termios,
+                          apply_winsize=apply_winsize)
+                sname = os.ttyname(stdin_fd)
+            else:
+                sname = os.ptsname(m)
+        else:
+            m, s, sname = self.openpty(apply_termios=apply_termios,
+                                       apply_winsize=apply_winsize)
+
+            pid = os.fork()
+            if pid == child:
+                os.close(m)
+                os.login_tty(s)
+            else:
+                os.close(s)
+
+        return pid, m, sname
+
 
 all_attributes = {}
 all_attributes["boolean"] = {}
@@ -551,60 +594,4 @@ all_attributes["control_character"] = set(_cc_d)
 all_attributes["non_canonical"] = set(_noncanon_d)
 all_attributes["speed"] = set(_speed_d)
 all_attributes["winsize"] = set(_winsz_d)
-
-baud_rates = set(_baud_d)
-
-control_character_value_help = f"""    POSSIBLE VALUES: a string or bytes object. If a string value is used, then it
-                     must be a string of length 1, or a string of length 2 staring
-                     with "^" (circumflex, caret) to represent a control character,
-                     or the string "undef". Please check the manpage of stty(1) for
-                     more details. If a value of type "bytes" is used, then it must
-                     be of length 1.
-"""
-
-
-def attribute_help():
-    """Print help for Stty attributes."""
-    print("For details on the following attributes, "
-          "check the manpage of stty(1) on your system.\n")
-
-    print("Stty attributes:\n")
-
-    for x, y in [("iflag", "input mode"),
-                 ("oflag", "output mode"),
-                 ("cflag", "control mode"),
-                 ("lflag", "local mode")]:
-        print(f"  Boolean {y} attributes (possible values: True, False):")
-        print(f"    {' '.join(sorted(all_attributes['boolean'][x]))}\n")
-
-    print("  Winsize attributes (possible values: any nonnegative integer):")
-    print(f"    {' '.join(sorted(all_attributes['winsize']))}\n")
-
-    print("  Non-canonical mode-related attributes (possible values: any nonnegative integer):")
-    print(f"    {' '.join(sorted(all_attributes['non_canonical']))}\n")
-
-    print("  CSIZE and *DLY attributes:")
-    heading1 = "ATTRIBUTE"
-    heading2 = "POSSIBLE VALUES"
-    csize_key = "csize"
-    csize_values = ", ".join(sorted([f'stty.{v}, "{v}"' for v in all_attributes["csize"]]))
-
-    padding = max(len(x) for x in all_attributes["delay_masks"])
-    padding = max(padding, len(csize_key), len(heading1))
-
-    # Print heading for the table.
-    print(f"    {heading1:^{padding}}  |  {heading2}")
-    # Print the CSIZE row.
-    print(f"    {csize_key:^{padding}}  |  {csize_values}")
-    # Print the *DLY rows.
-    for mask, maskvalset in all_attributes["delay_masks"].items():
-        mask_values = ", ".join(sorted([f'stty.{v}, "{v}"' for v in maskvalset]))
-        print(f"    {mask:^{padding}}  |  {mask_values}")
-
-    print("\n  Control character attributes:")
-    print(f"    ATTRIBUTES: {' '.join(sorted(all_attributes['control_character']))}")
-    print(control_character_value_help)
-
-    print("  Speed attributes:")
-    print(f"    ATTRIBUTES: {' '.join(sorted(all_attributes['speed']))}")
-    print(f"    POSSIBLE VALUES: {', '.join([str(n) for n in sorted(baud_rates)])}")
+all_attributes["baud_rates"] = set(_baud_d)
