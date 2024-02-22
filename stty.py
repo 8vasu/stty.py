@@ -20,13 +20,7 @@ import termios
 import copy
 import json
 
-__all__ = [
-    "Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH",
-    # The following is defined solely for the
-    # convenience of the user and is not used
-    # in the implementation of the Stty class.
-    "all_attributes"
-]
+__all__ = ["Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH", "settings"]
 
 # These are the "action" constants for termios.tcsetattr()
 # and are the only values accepted by the "when" named
@@ -257,13 +251,37 @@ _speed_d = {"ispeed": _ISPEED, "ospeed": _OSPEED}
 _winsz_d = {"rows": _ROWS, "cols": _COLS} if _HAVE_WINSZ else {}
 _default_winsize = [24, 80]
 
-# List of lowercase names of all Stty object
+# Set of lowercase names of all Stty object
 # attributes available on system (strings),
 # excluding "_termios" and "_winsize".
 _available = {
     *_bool_d, *_symbol_d, *_speed_d,
     *_cc_d, *_noncanon_d, *_winsz_d
 }
+
+# Dictionary of all available Stty object
+# attributes, attribute values, and other
+# data; built for convenient iteration.
+_available_dict = {}
+_available_dict["boolean"] = {}
+for flagname, maskset in [("iflag", _ifbool),
+                          ("oflag", _ofbool),
+                          ("cflag", _cfbool),
+                          ("lflag", _lfbool)]:
+    _available_dict["boolean"][flagname] = {mask.lower() for mask in maskset
+                                            if hasattr(termios, mask)}
+_available_dict["csize"] = {v.lower() for v in _cs["CSIZE"]
+                            if hasattr(termios, v)}
+_available_dict["delay_masks"] = {mask.lower(): {v.lower() for v in maskvalues
+                                                 if hasattr(termios, v)}
+                                  for mask, maskvalues in _dly.items()}
+_available_dict["control_character"] = set(_cc_d)
+_available_dict["non_canonical"] = set(_noncanon_d)
+_available_dict["speed"] = set(_speed_d)
+_available_dict["winsize"] = set(_winsz_d)
+_available_dict["baud_rates"] = set(_baud_d)
+# this copy is for the user
+settings = copy.deepcopy(_available_dict)
 
 
 class Stty(object):
@@ -405,6 +423,24 @@ class Stty(object):
         raise AttributeError(f"attribute '{name}' unsupported on platform")
 
     def __repr__(self):
+        ret = ""
+        for l, h in [(_available_dict["boolean"]["iflag"], "iflag bool"),
+                     (_available_dict["boolean"]["oflag"], "oflag bool"),
+                     (_available_dict["boolean"]["cflag"], "cflag bool"),
+                     (_available_dict["boolean"]["lflag"], "lflag bool"),
+                     (_available_dict["control_character"], "cc"),
+                     (_available_dict["non_canonical"], "min, time"),
+                     (["csize"], "csize"),
+                     (_available_dict["delay_masks"], "delay masks"),
+                     (_available_dict["speed"], "speed"),
+                     (_available_dict["winsize"], "winsize")]:
+            L = [f"{x}={getattr(self, x)}" for x in sorted(l)]
+            s = " ".join(L)
+            ret = f"{ret}\n{h.upper()}: {s}\n"
+
+        return ret
+
+    def __str__(self):
         return ", ".join(sorted([f"{x}={getattr(self, x)}" for x in _available]))
 
     def get(self):
@@ -512,12 +548,10 @@ class Stty(object):
 
     def raw(self):
         """Set raw combination mode."""
-        for x in _ifbool:
-            if hasattr(termios, x):
-                self.__setattr__(x.lower(), False)
-        for x in _lfbool:
-            if hasattr(termios, x):
-                self.__setattr__(x.lower(), False)
+        for x in _available_dict["boolean"]["iflag"]:
+            self.__setattr__(x, False)
+        for x in _available_dict["boolean"]["lflag"]:
+            self.__setattr__(x, False)
         self.set(opost=False, parenb=False,
                  csize=cs8, min=1, time=0)
 
@@ -576,22 +610,3 @@ class Stty(object):
                 os.close(s)
 
         return pid, m, sname
-
-
-all_attributes = {}
-all_attributes["boolean"] = {}
-for flagname, maskset in [("iflag", _ifbool),
-                          ("oflag", _ofbool),
-                          ("cflag", _cfbool),
-                          ("lflag", _lfbool)]:
-    all_attributes["boolean"][flagname] = {mask.lower() for mask in maskset
-                                     if hasattr(termios, mask)}
-all_attributes["csize"] = {v.lower() for v in _cs["CSIZE"] if hasattr(termios, v)}
-all_attributes["delay_masks"] = {mask.lower(): {v.lower() for v in maskvalues
-                                          if hasattr(termios, v)}
-                           for mask, maskvalues in _dly.items()}
-all_attributes["control_character"] = set(_cc_d)
-all_attributes["non_canonical"] = set(_noncanon_d)
-all_attributes["speed"] = set(_speed_d)
-all_attributes["winsize"] = set(_winsz_d)
-all_attributes["baud_rates"] = set(_baud_d)
