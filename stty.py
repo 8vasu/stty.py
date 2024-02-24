@@ -393,17 +393,25 @@ class Stty(object):
             return
 
         if name in _noncanon_d:
-            if not isinstance(value, int):
+            if not (isinstance(value, int) or isinstance(value, bytes)):
                 raise TypeError(f"value of attribute '{name}' must have "
-                                "type 'int'")
+                                "type 'int' or 'bytes'")
 
-            if value < 0:
-                raise ValueError(f"expected nonnegative value for "
-                                 f"attribute '{name}'")
+            if isinstance(value, int):
+                if value < 0:
+                    raise ValueError("expected nonnegative value for "
+                                     f"attribute '{name}'")
+                value_as_int = value
 
-            self._termios[_CC][_noncanon_d[name]] = bytes([value])
+            if isinstance(value, bytes):
+                if len(value) != 1:
+                    raise ValueError(f"unsupported value '{value}' for "
+                                     f"attribute '{name}'")
+                value_as_int = ord(value)
 
-            super().__setattr__(name, value)
+            self._termios[_CC][_noncanon_d[name]] = value
+
+            super().__setattr__(name, value_as_int)
             return
 
         if name in _winsz_d:
@@ -489,6 +497,21 @@ class Stty(object):
         if len(deficiency) > 0:
             raise ValueError("JSON file does not contain the following "
                              f"necessary attributes: {deficiency}")
+
+        # This "if" block mimics termios.tcgetattr behavior,
+        # which keeps "min" and "time" fields in "bytes"
+        # form in Canonical mode and converts them to
+        # integers in Non-Canonical mode; the dictionary "d"
+        # loaded from JSON will have integer "min" and
+        # "time" values (if it was generated using Stty.save
+        # and if it was not subsequently modified
+        # externally).
+        if d.get("icanon"): # Canonical mode.
+            if "min" in d:
+                d["min"] = chr(d["min"])
+            if "time" in d:
+                d["time"] = chr(d["time"])
+
         self.set(**d)
 
     def fromfd(self, fd):
@@ -517,8 +540,7 @@ class Stty(object):
             self.__setattr__(name, self._termios[_CC][_cc_d[name]])
 
         for name in _noncanon_d:
-            self.__setattr__(name,
-                             ord(self._termios[_CC][_noncanon_d[name]]))
+            self.__setattr__(name, self._termios[_CC][_noncanon_d[name]])
 
         if self._winsize:
             for name in _winsz_d:
