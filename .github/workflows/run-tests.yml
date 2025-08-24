@@ -15,7 +15,7 @@ jobs:
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
-      - name: Run test.sh
+      - name: Run test.sh in a pseudo-terminal
         run: |
-          ./test.sh
+          script -q -e -c "./test.sh" /dev/null
       - run: echo "This job's status is ${{ job.status }}."
