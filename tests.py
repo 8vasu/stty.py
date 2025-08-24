@@ -71,7 +71,7 @@ def test_create_and_access():
         print(e)
 
 # 3. Test setting boolean attributes.
-def test_set_boolean_1():
+def test_set_boolean():
     try:
         tty = stty.Stty(fd=0)
         orig = tty.echo
@@ -79,9 +79,9 @@ def test_set_boolean_1():
         assert tty.echo == (not orig)
         tty.echo = orig
         assert tty.echo == orig
-        print_result("test_set_boolean_1", True)
+        print_result("test_set_boolean", True)
     except Exception as e:
-        print_result("test_set_boolean_1", False)
+        print_result("test_set_boolean", False)
         print(e)
 
 # 4. Test setting symbolic attributes (csize, tabdly, etc).
@@ -270,25 +270,16 @@ def test_invalid_attribute():
         print(e)
 
 # 17. Test setting a boolean attribute.
-def test_set_boolean_2():
+def test_set_invalid_boolean():
     try:
         tty = stty.Stty(fd=0)
-
-        tty.echo = True
-        assert tty.echo is True
-
-        tty.echo = "this string evaluates to true"
-        assert tty.echo is True
-
-        tty.echo = False
-        assert tty.echo is False
-
-        tty.echo = None
-        assert tty.echo is False
-
-        print_result("test_set_boolean_2", True)
+        try:
+            tty.echo = None
+            print_result("test_set_invalid_boolean", False)
+        except TypeError:
+            print_result("test_set_invalid_boolean", True)
     except Exception as e:
-        print_result("test_set_boolean_2", False)
+        print_result("test_set_invalid_boolean", False)
         print(e)
 
 # 18. Test error handling for set() with invalid attribute.
@@ -330,7 +321,7 @@ def test_settings_dict():
 # Run all tests.
 test_cc_conversion()
 test_create_and_access()
-test_set_boolean_1()
+test_set_boolean()
 test_set_symbolic()
 test_set_speed()
 test_set_control_char()
@@ -344,7 +335,7 @@ test_forkpty()
 test_modes()
 test_settings_help()
 test_invalid_attribute()
-test_set_boolean_2()
+test_set_invalid_boolean()
 test_set_invalid()
 test_repr_str()
 test_settings_dict()

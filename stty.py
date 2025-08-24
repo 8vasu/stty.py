@@ -312,15 +312,17 @@ class Stty(object):
                                  "directly modified")
 
         if name in _bool_d:
+            if not isinstance(value, bool):
+                raise TypeError(f"value of attribute '{name}' must have "
+                                "type 'bool'")
+
             x = _bool_d[name]
             if value:
                 self._termios[x[0]] |= x[1]
-                super().__setattr__(name, True)
             else:
                 self._termios[x[0]] &= ~x[1]
-                super().__setattr__(name, False)
 
-            # super().__setattr__(name, value)
+            super().__setattr__(name, value)
             return
 
         if name in _symbol_d:
