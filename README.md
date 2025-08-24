@@ -211,43 +211,43 @@ Stty(fd: int = None, path: str = None, **opts)
 
 **Methods:**
 
-- `get() -> dict`  
+- `get() -> dict`
   Return a dictionary of all current settings.
 
-- `set(**opts)`  
+- `set(**opts)`
   Set multiple attributes at once.
 
-- `save(path: str = None)`  
+- `save(path: str = None)`
   Save settings to a JSON file, or return a deep copy if no path is given.
 
-- `load(path: str)`  
+- `load(path: str)`
   Load settings from a JSON file.
 
-- `fromfd(fd: int)`  
+- `fromfd(fd: int)`
   Load settings from a file descriptor.
 
-- `tofd(fd: int, when=TCSANOW, apply_termios=True, apply_winsize=True)`  
+- `tofd(fd: int, when=TCSANOW, apply_termios=True, apply_winsize=True)`
   Apply settings to a file descriptor.
 
-- `evenp(plus=True)`  
+- `evenp(plus=True)`
   Set/unset even parity mode.
 
-- `oddp(plus=True)`  
+- `oddp(plus=True)`
   Set/unset odd parity mode.
 
-- `raw()`  
+- `raw()`
   Set terminal to raw mode.
 
-- `nl(plus=True)`  
+- `nl(plus=True)`
   Set/unset nl combination mode.
 
-- `ek()`  
+- `ek()`
   Set ek combination mode.
 
-- `openpty(apply_termios=True, apply_winsize=True)`  
+- `openpty(apply_termios=True, apply_winsize=True)`
   Open a new pseudo-terminal pair and apply settings.
 
-- `forkpty(apply_termios=True, apply_winsize=True)`  
+- `forkpty(apply_termios=True, apply_winsize=True)`
   Fork a new process with a pseudo-terminal and apply settings.
 
 **Attribute Access:**
