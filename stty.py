@@ -1,5 +1,5 @@
 # stty.py - A Python library that works like stty(1).
-# Copyright (C) 2024 Soumendra Ganguly
+# Copyright (C) 2025 Soumendra Ganguly
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,7 +20,10 @@ import termios
 import copy
 import json
 
-__all__ = ["Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH", "settings"]
+__all__ = [
+    "Stty", "TCSANOW", "TCSADRAIN", "TCSAFLUSH",
+    "settings", "settings_help_str", "settings_help"
+]
 
 # These are the "action" constants for termios.tcsetattr()
 # and are the only values accepted by the "when" named
@@ -41,7 +44,8 @@ def cc_str_to_bytes(s):
     """Convert string to bytes where input string is
     the "string" in "<control>-character string" under
     "Special Control Character Assignments" in the POSIX
-    manpage of stty(1)."""
+    manpage of stty(1).
+    """
 
     # 's' is of type 'str'
 
@@ -65,7 +69,8 @@ def cc_bytes_to_str(b):
     """Convert bytes to string where output string is
     the "string" in "<control>-character string" under
     "Special Control Character Assignments" in the POSIX
-    manpage of stty(1)."""
+    manpage of stty(1).
+    """
 
     # 'b' is of type 'bytes'
 
@@ -280,7 +285,7 @@ _available_dict["non_canonical"] = set(_noncanon_d)
 _available_dict["speed"] = set(_speed_d)
 _available_dict["winsize"] = set(_winsz_d)
 _available_dict["baud_rates"] = set(_baud_d)
-# this copy is for the user
+# This copy is for the user.
 settings = copy.deepcopy(_available_dict)
 
 
@@ -310,10 +315,12 @@ class Stty(object):
             x = _bool_d[name]
             if value:
                 self._termios[x[0]] |= x[1]
+                super().__setattr__(name, True)
             else:
                 self._termios[x[0]] &= ~x[1]
+                super().__setattr__(name, False)
 
-            super().__setattr__(name, value)
+            # super().__setattr__(name, value)
             return
 
         if name in _symbol_d:
@@ -405,9 +412,9 @@ class Stty(object):
 
             if isinstance(value, bytes):
                 if len(value) != 1:
-                    raise ValueError(f"unsupported value '{value}' for "
-                                     f"attribute '{name}'")
-                value_as_int = ord(value)
+                    raise ValueError(f"expected 1 byte long value for "
+                                     f"attribute '{name}' but got '{value}'")
+                value_as_int = value[0]
 
             self._termios[_CC][_noncanon_d[name]] = value
 
@@ -467,7 +474,8 @@ class Stty(object):
 
     def save(self, path=None):
         """Return deep copy of self or save JSON.
-        This mimics "stty -g"."""
+        This mimics "stty -g".
+        """
         if not path:
             return copy.deepcopy(self)
 
@@ -508,9 +516,9 @@ class Stty(object):
         # externally).
         if d.get("icanon"): # Canonical mode.
             if "min" in d:
-                d["min"] = chr(d["min"])
+                d["min"] = bytes([d["min"]])
             if "time" in d:
-                d["time"] = chr(d["time"])
+                d["time"] = bytes([d["time"]])
 
         self.set(**d)
 
@@ -587,10 +595,10 @@ class Stty(object):
     def ek(self):
         """Set ek combination mode."""
         if hasattr(termios, "CERASE"):
-            self.erase = termios.CERASE
+            self.erase = bytes([termios.CERASE])
 
         if hasattr(termios, "CKILL"):
-            self.kill = termios.CKILL
+            self.kill = bytes([termios.CKILL])
 
     def openpty(self, apply_termios=True, apply_winsize=True):
         """Open a new pty pair and apply
@@ -632,3 +640,101 @@ class Stty(object):
                 os.close(s)
 
         return pid, m, sname
+
+# Print help message about Stty attributes.
+
+_settings_lines = []
+
+_settings_lines.append("For details on the following attributes, "
+      "check the manpage of stty(1) on your system.\n")
+
+_settings_lines.append("Stty attributes:\n")
+
+for x, y in [("iflag", "input mode"),
+             ("oflag", "output mode"),
+             ("cflag", "control mode"),
+             ("lflag", "local mode")]:
+    _settings_lines.append(
+        f"  Boolean {y} attributes (possible values: True, False):"
+    )
+    _settings_lines.append(
+        f"    {' '.join(sorted(_available_dict['boolean'][x]))}\n"
+    )
+
+_settings_lines.append(
+    "  Winsize attributes (possible values: any nonnegative integer):"
+)
+_settings_lines.append(
+    f"    {' '.join(sorted(_available_dict['winsize']))}\n"
+)
+
+_settings_lines.append(
+    "  Non-canonical mode-related attributes (possible values: "
+    "any nonnegative integer):"
+)
+_settings_lines.append(
+    f"    {' '.join(sorted(_available_dict['non_canonical']))}\n"
+)
+
+_settings_lines.append("  CSIZE and *DLY attributes:")
+heading1 = "ATTRIBUTE"
+heading2 = "POSSIBLE VALUES"
+csize_key = "csize"
+csize_values = ", ".join(
+    sorted([f'stty.{v}, "{v}"' for v in _available_dict["csize"]])
+)
+
+padding = max(len(x) for x in _available_dict["delay_masks"])
+padding = max(padding, len(csize_key), len(heading1))
+
+# Print heading for the table.
+_settings_lines.append(f"    {heading1:^{padding}}  |  {heading2}")
+# Print the CSIZE row.
+_settings_lines.append(f"    {csize_key:^{padding}}  |  {csize_values}")
+# Print the *DLY rows.
+for mask, maskvalset in _available_dict["delay_masks"].items():
+    mask_values = ", ".join(sorted([f'stty.{v}, "{v}"' for v in maskvalset]))
+    _settings_lines.append(f"    {mask:^{padding}}  |  {mask_values}")
+
+_settings_lines.append("\n  Control character attributes:")
+_settings_lines.append(
+    "    ATTRIBUTES: "
+    + " ".join(sorted(_available_dict['control_character']))
+)
+_settings_lines.append(
+    f"""    POSSIBLE VALUES: a string or bytes object. If a string value is
+                     used, then it must be a string of length 1, or
+                     a string of length 2 staring with "^" (caret,
+                     circumflex) to represent a control character,
+                     or the string "undef". Please check the manpage
+                     of stty(1) for more details. If a value of type
+                     "bytes" is used, then it must be of length 1.
+"""
+)
+
+_settings_lines.append("  Speed attributes:")
+_settings_lines.append(
+    f"    ATTRIBUTES: {' '.join(sorted(_available_dict['speed']))}"
+)
+_settings_lines.append(
+    "    POSSIBLE VALUES: "
+    + ", ".join([str(n) for n in sorted(_available_dict['baud_rates'])])
+)
+
+_settings_str = "\n".join(_settings_lines)
+
+def settings_help_str():
+    """Return help string about all
+    available Stty attributes and
+    their possible values on the
+    current platform.
+    """
+    return _settings_str
+
+def settings_help():
+    """Print help message about all
+    available Stty attributes and
+    their possible values on the
+    current platform.
+    """
+    print(_settings_str)
