@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stty"
-version = "0.1"
+version = "0.0.1"
 description = "A Python library for manipulating terminal settings in the style of POSIX `stty(1)`."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,7 +27,7 @@ maintainers = [
   { name = "Soumendra Ganguly", email = "soumendraganguly@gmail.com" },
 ]
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
+  "Development Status :: 4 - Beta",
 
   "Intended Audience :: Developers",
   "Topic :: Terminals",
