@@ -411,7 +411,7 @@ def test_repr_str():
 
 # 20. Test settings dict.
 def test_settings_dict():
-    all_success_local = False
+    all_success_local = True
 
     try:
         d = stty.settings
