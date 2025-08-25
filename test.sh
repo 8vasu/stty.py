@@ -1,3 +1,3 @@
 #!/bin/sh
 
-python3 ./tests.py
+cd src && python3 ./tests.py

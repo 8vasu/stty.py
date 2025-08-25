@@ -1,6 +1,6 @@
 # stty.py
 
-A Python library for manipulating terminal settings in the style of the POSIX `stty(1)` command.
+A Python library for manipulating terminal settings in the style of POSIX `stty(1)`.
 
 ---
 
