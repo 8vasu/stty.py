@@ -23,7 +23,13 @@ A Python library for manipulating terminal settings in the style of POSIX `stty(
 
 ## Installation
 
-This is a pure Python library. Place `stty.py` in your project or install via your preferred method.
+To install this package, run:
+
+```bash
+pip install stty
+```
+
+Alternatively, since this library does not have any dependencies outside of the Python standard library, simply place `stty.py` in your project.
 
 ---
 
