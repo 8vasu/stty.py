@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stty"
-version = "0.0.1"
-description = "A Python library for manipulating terminal settings in the style of POSIX `stty(1)`."
+version = "0.0.2"
+description = "A Python library for manipulating terminal settings in the style of POSIX stty(1)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
