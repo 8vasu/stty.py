@@ -11,6 +11,11 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
       - run: echo "The ${{ github.repository }} repository has been cloned to the runner."
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: echo "Python 3.13 has now been set up on the runner."
       - run: echo "The workflow is now ready to test your code on the runner."
       - name: List files in the repository
         run: |
