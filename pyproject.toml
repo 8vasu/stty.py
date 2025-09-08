@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stty"
-version = "0.0.3"
+version = "0.0.4"
 description = "A Python library for manipulating terminal settings in the style of POSIX stty(1)."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.13"
 license = { file = "LICENSE" }
 keywords = [
   "terminal",
@@ -37,10 +37,6 @@ classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only"
 ]

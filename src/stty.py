@@ -14,9 +14,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
+
 import os
+
+if os.name != "posix":
+    raise ImportError("the stty module only works on POSIX-compliant systems")
+
 import termios
+
+if not hasattr(termios, "_POSIX_VDISABLE"):
+    # I have added _POSIX_VDISABLE to the termios module in
+    # Python 3.13: https://github.com/python/cpython/pull/114985
+    raise ImportError("the stty module requires Python 3.13 or later")
+
+import sys
 import copy
 import json
 
@@ -31,14 +42,6 @@ __all__ = [
 TCSANOW = termios.TCSANOW
 TCSADRAIN = termios.TCSADRAIN
 TCSAFLUSH = termios.TCSAFLUSH
-
-if not hasattr(termios, "_POSIX_VDISABLE"):
-    # This is not desirable, but I have added
-    # _POSIX_VDISABLE to the termios module in Python 3.13:
-    # https://github.com/python/cpython/pull/114985
-    #
-    # I will remove this after sometime.
-    termios._POSIX_VDISABLE = 0x00
 
 def cc_str_to_bytes(s):
     """Convert string to bytes where input string is

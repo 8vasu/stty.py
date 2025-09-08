@@ -21,9 +21,9 @@ A Python library for manipulating terminal settings in the style of POSIX `stty(
 
 ---
 
-## Installation
+## Requirements and Installation
 
-To install this package, run:
+**Python 3.13 or above** is required. To install this package, run:
 
 ```bash
 pip install stty
