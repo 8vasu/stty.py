@@ -22,7 +22,7 @@ jobs:
           ls ${{ github.workspace }}
       - name: Run test.sh in a pseudo-terminal
         run: |
-          script -q -e -c "./test.sh" /dev/null
+          script -q -e -c ./test.sh /dev/null
       - run: echo "This job's status is ${{ job.status }}."
 
   Run-Tests-macOS:
@@ -45,5 +45,5 @@ jobs:
           ls ${{ github.workspace }}
       - name: Run test.sh in a pseudo-terminal
         run: |
-          script -q -e -c "./test.sh" /dev/null
+          script -q /dev/null ./test.sh
       - run: echo "This job's status is ${{ job.status }}."
