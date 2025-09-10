@@ -25,7 +25,8 @@ import termios
 if not hasattr(termios, "_POSIX_VDISABLE"):
     # I have added _POSIX_VDISABLE to the termios module in
     # Python 3.13: https://github.com/python/cpython/pull/114985
-    raise ImportError("the stty module requires Python 3.13 or later")
+    raise ImportError("the stty module requires termios._POSIX_VDISABLE,"
+                      "which is available in Python versions >= 3.13")
 
 import sys
 import copy
