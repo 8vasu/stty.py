@@ -199,6 +199,33 @@ else: # Parent process
 
 ---
 
+### 11. Check equality of (all termios and winsize attributes of) 2 Stty objects
+
+```python
+x = stty.Stty(0)
+y = stty.Stty(0)
+
+if x.get() == y.get():
+    print("equal")
+else:
+    print("not equal")
+```
+
+---
+
+### 12. Check equality of (some termios and winsize attributes of) 2 Stty objects
+
+```python
+x = stty.Stty(0)
+
+if x.eq(echo=True, eof="^D")
+    print("echo is True and eof is ^D")
+else:
+    print("echo is False or eof is not ^D")
+```
+
+---
+
 ## API Reference
 
 ### Classes
@@ -218,31 +245,34 @@ Stty(fd: int = None, path: str = None, **opts)
 **Methods:**
 
 - `get() -> dict`
-  Return a dictionary of all current settings.
+  Return dictionary of termios and winsize attributes available on the system mapped to their respective values.
 
 - `set(**opts)`
-  Set multiple attributes at once.
+  Set multiple attributes as named arguments.
+
+- `eq(**opts)`
+  Return True if all attributes, which are specified as named arguments, have values equal to those of the corresponding named arguments; return False otherwise.
 
 - `save(path: str = None)`
-  Save settings to a JSON file, or return a deep copy if no path is given.
+  Return deep copy of self or save JSON. This mimics "stty -g".
 
 - `load(path: str)`
-  Load settings from a JSON file.
+  Load termios and winsize from JSON file.
 
 - `fromfd(fd: int)`
-  Load settings from a file descriptor.
+  Get settings from terminal.
 
 - `tofd(fd: int, when=TCSANOW, apply_termios=True, apply_winsize=True)`
-  Apply settings to a file descriptor.
+  Apply settings to terminal.
 
 - `evenp(plus=True)`
-  Set/unset even parity mode.
+  Set/unset evenp combination mode.
 
 - `oddp(plus=True)`
-  Set/unset odd parity mode.
+  Set/unset oddp combination mode.
 
 - `raw()`
-  Set terminal to raw mode.
+  Set raw combination mode.
 
 - `nl(plus=True)`
   Set/unset nl combination mode.
@@ -251,10 +281,10 @@ Stty(fd: int = None, path: str = None, **opts)
   Set ek combination mode.
 
 - `openpty(apply_termios=True, apply_winsize=True)`
-  Open a new pseudo-terminal pair and apply settings.
+  Open a new pty pair and apply settings to slave end.
 
 - `forkpty(apply_termios=True, apply_winsize=True)`
-  Fork a new process with a pseudo-terminal and apply settings.
+  Call os.forkpty() and apply settings to slave end.
 
 **Attribute Access:**
 

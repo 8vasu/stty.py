@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 import os
 
 if os.name != "posix":
@@ -465,7 +464,9 @@ class Stty(object):
         return ", ".join(sorted([f"{x}={getattr(self, x)}" for x in _available]))
 
     def get(self):
-        """Return dictionary of relevant attributes."""
+        """Return dictionary of termios and winsize attributes
+        available on the system mapped to their respective values.
+        """
         return {x: getattr(self, x) for x in _available}
 
     def set(self, **opts):
@@ -477,6 +478,116 @@ class Stty(object):
 
         for x in opts:
             self.__setattr__(x, opts[x])
+
+    def eq(self, **opts):
+        """Return True if all attributes, which are specified
+        as named arguments, have values equal to those of the
+        corresponding named arguments; return False otherwise.
+        """
+        excess = set(opts) - _available
+        if len(excess) > 0:
+            raise AttributeError("attributes in the following set are "
+                                 f"unsupported on this platform: {excess}")
+
+        for name in opts:
+            value = opts[name]
+
+            if name in _bool_d:
+                if not isinstance(value, bool):
+                    return False
+
+                if getattr(self, name) != value:
+                    return False
+
+                continue
+
+            if name in _symbol_d:
+                if not (isinstance(value, int) or isinstance(value, str)):
+                    return False
+
+                x = _symbol_d[name] # 4-tuple
+
+                if isinstance(value, int):
+                    if value not in x[2]:
+                        return False
+
+                    value_as_str = x[2][value]
+
+                if isinstance(value, str):
+                    if value not in x[3]:
+                        return False
+
+                    value_as_str = value
+
+                if getattr(self, name) != value_as_str:
+                    return False
+
+                continue
+
+            if name in _speed_d:
+                if not isinstance(value, int):
+                    return False
+
+                if value not in _baud_d:
+                    return False
+
+                if getattr(self, name) != value:
+                    return False
+
+                continue
+
+            if name in _cc_d:
+                if not (isinstance(value, str) or isinstance(value, bytes)):
+                    return False
+
+                if isinstance(value, str):
+                    value_as_bytes = cc_str_to_bytes(value)
+                    value_as_str = cc_bytes_to_str(value_as_bytes)
+
+                if isinstance(value, bytes):
+                    value_as_bytes = value
+                    value_as_str = cc_bytes_to_str(value_as_bytes)
+
+                if value_as_bytes == None or value_as_str == None:
+                    return False
+
+                if getattr(self, name) != value_as_str:
+                    return False
+
+                continue
+
+            if name in _noncanon_d:
+                if not (isinstance(value, int) or isinstance(value, bytes)):
+                    return False
+
+                if isinstance(value, int):
+                    if value < 0:
+                        return False
+                    value_as_int = value
+
+                if isinstance(value, bytes):
+                    if len(value) != 1:
+                        return False
+                    value_as_int = value[0]
+
+                if getattr(self, name) != value_as_int:
+                    return False
+
+                continue
+
+            if name in _winsz_d:
+                if not isinstance(value, int):
+                    return False
+
+                if value < 0:
+                    return False
+
+                if getattr(self, name) != value:
+                    return False
+
+                continue
+
+        return True
 
     def save(self, path=None):
         """Return deep copy of self or save JSON.

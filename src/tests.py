@@ -424,6 +424,42 @@ def test_settings_dict():
 
     return all_success_local
 
+# 21. Test equality of (all termios and winsize attributes of) 2 Stty objects.
+def test_equality():
+    all_success_local = True
+
+    x = stty.Stty(fd=0)
+    y = stty.Stty(fd=0)
+
+    try:
+        assert x.get() == y.get()
+        print_result("test_equality", True)
+    except Exception as e:
+        print_result("test_equality", False)
+        all_success_local = False
+        print(e)
+
+    return all_success_local
+
+# 22. Test equality of (some termios and winsize attributes of) 2 Stty objects.
+def test_equality_attributes():
+    all_success_local = True
+
+    x = stty.Stty(fd=0)
+    x.echo = True
+    x.eof = "^D"
+
+    try:
+        assert x.eq(echo=True, eof="^D")
+        assert x.eq(echo=True, eof=stty.cc_str_to_bytes("^D"))
+        print_result("test_equality_attributes", True)
+    except Exception as e:
+        print_result("test_equality_attributes", False)
+        all_success_local = False
+        print(e)
+
+    return all_success_local
+
 # Run all tests.
 try:
     assert test_cc_conversion()
@@ -446,5 +482,7 @@ try:
     assert test_set_invalid()
     assert test_repr_str()
     assert test_settings_dict()
+    assert test_equality()
+    assert test_equality_attributes()
 except AssertionError:
     sys.exit(1)
